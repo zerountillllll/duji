@@ -7,6 +7,7 @@ import { ImageModal } from './ImageModal';
 import { fileToBase64, generateId, formatDate } from '../utils';
 import { ArrowLeft, Plus, X, Image as ImageIcon, Trash2, Clock, AlertCircle } from 'lucide-react';
 import { Translation } from '../i18n';
+import { App as CapacitorApp } from '@capacitor/app';
 
 interface NoteEditorProps {
   initialNote?: Book | null;
@@ -93,6 +94,33 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         return false;
     }
   };
+
+  // Hardware Back Button Handler for Editor
+  useEffect(() => {
+    const handleHardwareBack = async () => {
+        const listener = await CapacitorApp.addListener('backButton', () => {
+            if (showDiscardConfirm) {
+                // If dialog is already open, do nothing (or close it?)
+                return; 
+            }
+            
+            if (hasUnsavedChanges()) {
+                setShowDiscardConfirm(true);
+            } else {
+                onCancel();
+            }
+        });
+        return listener;
+    };
+
+    let listenerHandle: any;
+    handleHardwareBack().then(h => { listenerHandle = h; });
+
+    return () => {
+        if (listenerHandle) listenerHandle.remove();
+    };
+  }, [title, rating, protagonists, tags, entries, newContent, newImages, showDiscardConfirm]);
+
 
   const handleBack = () => {
       if (hasUnsavedChanges()) {
@@ -446,7 +474,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                                         <Trash2 size={14} />
                                     </button>
                                 </div>
-                                <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                                {/* Added break-all class here for long number wrapping */}
+                                <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed break-all">
                                     {entry.content}
                                 </div>
                                 {entry.images && entry.images.length > 0 && (

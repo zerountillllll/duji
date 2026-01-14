@@ -78,6 +78,31 @@ export const getHighlightedText = (text: string, highlight: string) => {
   return parts; 
 };
 
+// Helper to get a snippet context around a keyword
+export const getContextSnippet = (content: string, query: string, maxLength: number = 60): string => {
+  if (!query || !query.trim()) return content.substring(0, maxLength * 2);
+  
+  const lowerContent = content.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  const index = lowerContent.indexOf(lowerQuery);
+
+  // If query not found, return start
+  if (index === -1) return content.substring(0, maxLength * 2);
+
+  const halfLength = maxLength;
+  // Calculate start and end indices
+  const start = Math.max(0, index - halfLength); 
+  const end = Math.min(content.length, index + query.length + halfLength); 
+
+  let snippet = content.substring(start, end);
+
+  // Add ellipses
+  if (start > 0) snippet = '...' + snippet;
+  if (end < content.length) snippet = snippet + '...';
+
+  return snippet;
+};
+
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -87,11 +112,14 @@ export const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
-export const filterBooks = (books: Book[], query: string, activeTag: string | null): Book[] => {
+export const filterBooks = (books: Book[], query: string, activeTags: Set<string>): Book[] => {
   let filtered = books;
 
-  if (activeTag) {
-    filtered = filtered.filter(b => b.tags.includes(activeTag));
+  if (activeTags.size > 0) {
+    filtered = filtered.filter(b => 
+      // OR Logic: Book must have at least one of the selected tags
+      b.tags.some(tag => activeTags.has(tag))
+    );
   }
 
   if (query.trim()) {

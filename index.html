@@ -30,26 +30,31 @@
           scrollbar-width: none;  /* Firefox */
       }
       /* Safe area padding for notches */
-      /* Uses max to ensure at least 20px padding even on devices without notches */
+      /* Uses !important to ensure it overrides Tailwind's py-3 padding-top */
       .pt-safe {
-        padding-top: 20px; 
-        padding-top: max(20px, env(safe-area-inset-top));
+        padding-top: 48px !important; 
+        padding-top: max(48px, env(safe-area-inset-top)) !important;
       }
       .pb-safe {
-        padding-bottom: 20px;
-        padding-bottom: max(20px, env(safe-area-inset-bottom));
+        padding-bottom: 24px !important;
+        padding-bottom: max(24px, env(safe-area-inset-bottom)) !important;
       }
     </style>
   <script type="importmap">
 {
   "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
     "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "@capacitor/app": "https://esm.sh/@capacitor/app@^8.0.0",
     "vite": "https://esm.sh/vite@^7.3.1",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "@capacitor/cli": "https://esm.sh/@capacitor/cli@^8.0.1"
+    "@capacitor/cli": "https://esm.sh/@capacitor/cli@^8.0.1",
+    "@capacitor/status-bar": "https://esm.sh/@capacitor/status-bar@^8.0.0",
+    "@capacitor/core": "https://esm.sh/@capacitor/core@^8.0.1",
+    "@capacitor/filesystem": "https://esm.sh/@capacitor/filesystem@^8.0.0",
+    "@capacitor/share": "https://esm.sh/@capacitor/share@^8.0.0"
   }
 }
 </script>
@@ -57,6 +62,6 @@
 </head>
   <body class="bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-200">
     <div id="root"></div>
-  <script type="module" src="/index.tsx"></script>
-</body>
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>
