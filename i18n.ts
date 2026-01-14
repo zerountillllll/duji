@@ -29,7 +29,7 @@ export const translations = {
     // Time
     timeToday: "Today",
     timeYesterday: "Yesterday",
-    timeBeforeYesterday: "2 days ago", // English doesn't have a common specific word for "前天" in UI short form
+    timeBeforeYesterday: "2 days ago", 
     timeDaysAgo: "days ago",
     timeYearsAgo: "years ago",
     // Editor
@@ -51,6 +51,15 @@ export const translations = {
     addImage: "Add Image",
     titleRequired: "Title is required",
     duplicateTitle: "This book title already exists.",
+    // Discard Dialog
+    discardTitle: "Unsaved Changes",
+    discardMessage: "You have unsaved changes. How would you like to proceed?",
+    saveAndExit: "Save & Exit",
+    discardAndExit: "Don't Save",
+    keepEditing: "Keep Editing",
+    // Alerts
+    alertTitle: "Notice",
+    ok: "OK",
     // Dialog
     importConflict: "Import Conflict",
     conflictMsg: (title: string) => `A book with the title "${title}" already exists.`,
@@ -120,6 +129,15 @@ export const translations = {
     addImage: "添加图片",
     titleRequired: "书名不能为空",
     duplicateTitle: "书名已存在，请检查。",
+    // Discard Dialog
+    discardTitle: "未保存的更改",
+    discardMessage: "您有未保存的修改或笔记草稿。",
+    saveAndExit: "保存并退出",
+    discardAndExit: "不保存退出",
+    keepEditing: "继续编辑",
+    // Alerts
+    alertTitle: "提示",
+    ok: "知道了",
     // Dialog
     importConflict: "导入冲突",
     conflictMsg: (title: string) => `标题为 "${title}" 的书籍已存在。`,

@@ -322,8 +322,8 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-200 flex flex-col">
-      {/* Navbar */}
-      <div className="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+      {/* Navbar with Safe Area Padding */}
+      <div className="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 py-3 pt-safe">
         <div className="flex items-center justify-between max-w-2xl mx-auto">
           {selectionMode ? (
              <div className="flex items-center w-full justify-between">
@@ -435,8 +435,7 @@ const App: React.FC = () => {
                         <select 
                         value={sortField}
                         onChange={(e) => setSortField(e.target.value as SortField)}
-                        className="text-xs bg-transparent border-none text-slate-500 focus:ring-0 cursor-pointer text-right"
-                        dir="rtl"
+                        className="text-xs bg-transparent border-none text-slate-500 focus:ring-0 cursor-pointer text-center"
                         >
                         <option value="updatedAt">{t.sortRecent}</option>
                         <option value="createdAt">{t.sortCreated}</option>

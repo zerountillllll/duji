@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>读迹</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -29,6 +29,16 @@
           -ms-overflow-style: none;  /* IE and Edge */
           scrollbar-width: none;  /* Firefox */
       }
+      /* Safe area padding for notches */
+      /* Uses max to ensure at least 20px padding even on devices without notches */
+      .pt-safe {
+        padding-top: 20px; 
+        padding-top: max(20px, env(safe-area-inset-top));
+      }
+      .pb-safe {
+        padding-bottom: 20px;
+        padding-bottom: max(20px, env(safe-area-inset-bottom));
+      }
     </style>
   <script type="importmap">
 {
@@ -36,7 +46,10 @@
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "react/": "https://esm.sh/react@^19.2.3/",
     "react": "https://esm.sh/react@^19.2.3",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "@capacitor/cli": "https://esm.sh/@capacitor/cli@^8.0.1"
   }
 }
 </script>

@@ -3,8 +3,9 @@ import { Book, Entry } from '../types';
 import { Button } from './Button';
 import { Tag } from './Tag';
 import { ConfirmDialog } from './ConfirmDialog';
+import { ImageModal } from './ImageModal';
 import { fileToBase64, generateId, formatDate } from '../utils';
-import { ArrowLeft, Plus, X, Image as ImageIcon, Trash2, Calendar, Clock, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Plus, X, Image as ImageIcon, Trash2, Clock, AlertCircle } from 'lucide-react';
 import { Translation } from '../i18n';
 
 interface NoteEditorProps {
@@ -13,7 +14,7 @@ interface NoteEditorProps {
   onCancel: () => void;
   onDelete?: (id: string) => void;
   availableTags?: string[];
-  existingTitles?: string[]; // Added for duplicate check
+  existingTitles?: string[];
   t: Translation;
   locale: string;
 }
@@ -46,6 +47,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   // Dialog State
   const [entryToDelete, setEntryToDelete] = useState<string | null>(null);
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  
+  // Confirmation Dialogs
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [showValidationAlert, setShowValidationAlert] = useState(false);
   
   // Duplicate Check
   const isDuplicateTitle = existingTitles.some(et => et.toLowerCase() === title.trim().toLowerCase());
@@ -59,20 +65,54 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       setProtagonists(initialNote.protagonists);
       setRating(initialNote.rating);
       setTags(initialNote.tags);
-      // Sort entries by date descending
       setEntries([...initialNote.entries].sort((a, b) => b.createdAt - a.createdAt));
     }
   }, [initialNote]);
 
+  const hasUnsavedChanges = () => {
+    // 1. Check if there is content in the "Add Entry" section or input fields
+    if (newContent.trim() !== '' || newImages.length > 0) return true;
+    if (protagonistInput.trim() !== '') return true;
+    if (tagInput.trim() !== '') return true;
+
+    // 2. Check if main fields differ from initial
+    if (initialNote) {
+        const currentRating = rating === '' ? 0 : rating;
+        if (title !== initialNote.title) return true;
+        if (currentRating !== initialNote.rating) return true;
+        if (JSON.stringify(protagonists) !== JSON.stringify(initialNote.protagonists)) return true;
+        if (JSON.stringify(tags) !== JSON.stringify(initialNote.tags)) return true;
+        if (entries.length !== initialNote.entries.length) return true;
+        return false;
+    } else {
+        // New book: is anything filled?
+        if (title.trim() !== '') return true;
+        if (protagonists.length > 0) return true;
+        if (tags.length > 0) return true;
+        if (rating !== '' && rating !== 0) return true;
+        return false;
+    }
+  };
+
+  const handleBack = () => {
+      if (hasUnsavedChanges()) {
+          setShowDiscardConfirm(true);
+      } else {
+          onCancel();
+      }
+  };
+
   const handleSave = () => {
+    // Title Validation
     if (!title.trim()) {
-      alert(t.titleRequired);
+      setShowDiscardConfirm(false); // Make sure discard dialog is closed if it was open
+      setShowValidationAlert(true); // Show Alert
       return;
     }
 
     let updatedEntries = [...entries];
 
-    // If there is new content in the text area that hasn't been added yet, add it automatically
+    // Auto-save draft content as new entry if exists
     if (newContent.trim() || newImages.length > 0) {
         const newEntry: Entry = {
             id: generateId(),
@@ -83,11 +123,24 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         updatedEntries = [newEntry, ...updatedEntries];
     }
 
+    // Auto-save pending inputs for Protagonists and Tags
+    const finalProtagonists = [...protagonists];
+    const pInputTrimmed = protagonistInput.trim();
+    if (pInputTrimmed && !finalProtagonists.includes(pInputTrimmed)) {
+        finalProtagonists.push(pInputTrimmed);
+    }
+
+    const finalTags = [...tags];
+    const tInputTrimmed = tagInput.trim();
+    if (tInputTrimmed && !finalTags.includes(tInputTrimmed)) {
+        finalTags.push(tInputTrimmed);
+    }
+
     onSave({
       title,
-      protagonists,
+      protagonists: finalProtagonists,
       rating: typeof rating === 'number' ? rating : 0,
-      tags,
+      tags: finalTags,
       entries: updatedEntries,
     }, initialNote?.id);
   };
@@ -102,14 +155,15 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       createdAt: Date.now()
     };
 
-    setEntries([newEntry, ...entries]);
+    setEntries(prev => [newEntry, ...prev]);
     setNewContent('');
     setNewImages([]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleDeleteEntryConfirm = () => {
       if (entryToDelete) {
-          setEntries(entries.filter(e => e.id !== entryToDelete));
+          setEntries(prev => prev.filter(e => e.id !== entryToDelete));
           setEntryToDelete(null);
       }
   };
@@ -118,7 +172,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const handleAddProtagonist = () => {
     const trimmed = protagonistInput.trim();
     if (trimmed && !protagonists.includes(trimmed)) {
-      setProtagonists([...protagonists, trimmed]);
+      setProtagonists(prev => [...prev, trimmed]);
       setProtagonistInput('');
     }
   };
@@ -131,14 +185,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   const removeProtagonist = (name: string) => {
-    setProtagonists(protagonists.filter(p => p !== name));
+    setProtagonists(prev => prev.filter(p => p !== name));
   };
 
   // --- Tag Logic ---
   const handleAddTag = (tagToAdd?: string) => {
     const trimmed = tagToAdd || tagInput.trim();
     if (trimmed && !tags.includes(trimmed)) {
-      setTags([...tags, trimmed]);
+      setTags(prev => [...prev, trimmed]);
       setTagInput('');
     }
   };
@@ -151,298 +205,315 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   const removeTag = (tag: string) => {
-    setTags(tags.filter(t => t !== tag));
+    setTags(prev => prev.filter(t => t !== tag));
   };
 
   const quickAddTags = availableTags.filter(t => !tags.includes(t));
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
+    if (e.target.files && e.target.files.length > 0) {
       try {
-        const base64 = await fileToBase64(e.target.files[0]);
-        setNewImages([...newImages, base64]);
+        const files = Array.from(e.target.files);
+        const promises = files.map(file => fileToBase64(file));
+        const base64Results = await Promise.all(promises);
+        setNewImages(prev => [...prev, ...base64Results]);
       } catch (err) {
         console.error("Image upload failed", err);
       }
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
   const removeImage = (index: number) => {
-    setNewImages(newImages.filter((_, i) => i !== index));
+    setNewImages(prev => prev.filter((_, i) => i !== index));
   };
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-slate-900 animate-in fade-in slide-in-from-bottom-4 duration-300">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900">
       {/* Header */}
-      <div className="sticky top-0 z-10 flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md">
-        <button onClick={onCancel} className="p-2 -ml-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full">
-          <ArrowLeft size={22} />
-        </button>
-        <div className="flex gap-2 items-center">
-          {initialNote && onDelete && (
-             <button type="button" onClick={() => onDelete(initialNote.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors">
-               <Trash2 size={20} />
-             </button>
-          )}
-          <button onClick={handleSave} className="px-5 py-1.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-full font-bold hover:opacity-90 active:scale-95 transition-all text-sm shadow-sm">
-            {t.save}
+      <div className="sticky top-0 z-20 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between pt-safe shadow-sm">
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={handleBack}
+            className="p-2 -ml-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+          >
+            <ArrowLeft size={20} />
           </button>
+          <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+            {initialNote ? t.editTitle : t.newTitle}
+          </h2>
+        </div>
+        <div className="flex gap-2">
+           {initialNote && onDelete && (
+            <Button variant="ghost" className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => onDelete(initialNote.id)}>
+              <Trash2 size={18} />
+            </Button>
+           )}
+           <Button onClick={handleSave}>{t.save}</Button>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-safe">
         
-        {/* Book Metadata Section */}
-        <div className="space-y-5">
-            {/* Title */}
-            <div>
-              <input
-                  type="text"
-                  value={title}
-                  onChange={e => setTitle(e.target.value)}
-                  placeholder={t.titlePlaceholder}
-                  className={`w-full text-xl font-bold bg-transparent border-none p-0 focus:ring-0 leading-tight transition-colors ${
-                    isDuplicateTitle ? 'text-red-600 dark:text-red-400' : 'placeholder:text-slate-300 dark:placeholder:text-slate-700'
-                  }`}
-                  autoFocus={!initialNote}
-              />
-              <div className={`h-px w-12 mt-2 transition-colors duration-300 ${isDuplicateTitle ? 'bg-red-500' : 'bg-indigo-500'}`}></div>
-              
-              {isDuplicateTitle && (
-                <div className="flex items-center mt-2 text-xs text-red-500 dark:text-red-400 animate-in slide-in-from-top-1">
-                  <AlertCircle size={12} className="mr-1" />
-                  {t.duplicateTitle}
+        {/* Book Metadata */}
+        <div className="space-y-4 bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+          {/* Title */}
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">{t.bookTitle} <span className="text-red-500">*</span></label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={t.titlePlaceholder}
+              className={`w-full bg-slate-50 dark:bg-slate-900 border ${!initialNote && isDuplicateTitle ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' : 'border-slate-200 dark:border-slate-700 focus:border-indigo-500 focus:ring-indigo-500/20'} rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 transition-all`}
+            />
+            {!initialNote && isDuplicateTitle && (
+              <div className="flex items-center gap-1 mt-1 text-xs text-red-500 animate-in slide-in-from-top-1">
+                <AlertCircle size={12} />
+                {t.duplicateTitle}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+             {/* Protagonists */}
+             <div className="col-span-2 sm:col-span-1">
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">{t.protagonist}</label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {protagonists.map(p => (
+                    <Tag key={p} label={p} onDelete={() => removeProtagonist(p)} active prefix="" />
+                  ))}
                 </div>
-              )}
-
-              {initialNote && !isDuplicateTitle && (
-                  <div className="flex items-center text-xs text-slate-400 mt-2">
-                      {t.created}: {formatDate(initialNote.createdAt, locale)}
-                  </div>
-              )}
-            </div>
-
-            {/* Protagonist (Multi) & Rating */}
-            <div>
-                 <div className="flex justify-between items-center mb-1.5">
-                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t.protagonist}</label>
-                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t.ratingLabel}</label>
-                 </div>
-                 <div className="grid grid-cols-[1fr_80px] gap-4">
-                    {/* Protagonist Input */}
-                    <div className="flex flex-wrap items-center gap-2 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
-                        {protagonists.map(p => (
-                            <span key={p} className="inline-flex items-center px-2 py-1 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs shadow-sm border border-slate-100 dark:border-slate-600">
-                                {p}
-                                <button onClick={() => removeProtagonist(p)} className="ml-1.5 text-slate-400 hover:text-red-500">&times;</button>
-                            </span>
-                        ))}
-                         <div className="flex-1 flex items-center min-w-[100px]">
-                           <input
-                              type="text"
-                              value={protagonistInput}
-                              onChange={e => setProtagonistInput(e.target.value)}
-                              onKeyDown={handleKeyDownProtagonist}
-                              placeholder={t.protagonistPlaceholder}
-                              className="flex-1 bg-transparent outline-none text-sm placeholder:text-slate-400 py-0.5"
-                          />
-                          <button 
-                            type="button" 
-                            onClick={handleAddProtagonist}
-                            className="ml-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-0.5"
-                          >
-                            <Plus size={16} />
-                          </button>
-                         </div>
-                    </div>
-
-                    {/* Rating Input */}
-                    <div>
-                        <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={rating}
-                        onChange={e => {
-                            const val = parseInt(e.target.value);
-                            if (isNaN(val)) setRating('');
-                            else if (val > 100) setRating(100);
-                            else if (val < 0) setRating(0);
-                            else setRating(val);
-                        }}
-                        placeholder="-"
-                        className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-lg px-2 py-2 focus:ring-2 focus:ring-indigo-500/20 outline-none text-center font-mono font-bold text-slate-700 dark:text-slate-200"
-                        />
-                    </div>
-                </div>
-            </div>
-
-            {/* Tags */}
-            <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{t.tagsLabel}</label>
-            <div className="flex flex-wrap items-center gap-2">
-                {tags.map(tag => (
-                <Tag key={tag} label={tag} onDelete={() => removeTag(tag)} active />
-                ))}
-                
-                <div className="flex items-center bg-slate-50 dark:bg-slate-800/50 rounded-full border border-slate-100 dark:border-slate-800 px-3 py-1">
-                  <span className="text-slate-400 mr-1">#</span>
+                <div className="flex gap-2">
                   <input
                     type="text"
+                    value={protagonistInput}
+                    onChange={(e) => setProtagonistInput(e.target.value)}
+                    onKeyDown={handleKeyDownProtagonist}
+                    placeholder={t.protagonistPlaceholder}
+                    className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                  <Button type="button" variant="secondary" onClick={handleAddProtagonist} disabled={!protagonistInput.trim()} size="sm">
+                    <Plus size={18} />
+                  </Button>
+                </div>
+             </div>
+
+             {/* Rating */}
+             <div className="col-span-2 sm:col-span-1">
+               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">{t.ratingLabel}</label>
+               <input
+                 type="number"
+                 min="0"
+                 max="100"
+                 value={rating}
+                 onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    if (!isNaN(val) && val >= 0 && val <= 100) setRating(val);
+                    else if (e.target.value === '') setRating('');
+                 }}
+                 placeholder={t.scorePlaceholder}
+                 className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+               />
+               <div className="mt-2 w-full bg-slate-100 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full transition-all duration-300 ${
+                        (rating || 0) >= 80 ? 'bg-green-500' : (rating || 0) >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                    }`} 
+                    style={{ width: `${rating || 0}%` }}
+                  />
+               </div>
+             </div>
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">{t.tagsLabel}</label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {tags.map(tag => (
+                <Tag key={tag} label={tag} onDelete={() => removeTag(tag)} active />
+              ))}
+            </div>
+            <div className="flex gap-2 mb-2">
+                <input
+                    type="text"
                     value={tagInput}
-                    onChange={e => setTagInput(e.target.value)}
+                    onChange={(e) => setTagInput(e.target.value)}
                     onKeyDown={handleKeyDownTag}
                     placeholder={t.addTagPlaceholder}
-                    className="bg-transparent outline-none text-xs placeholder:text-slate-400 w-24"
-                  />
-                  <button 
-                    type="button" 
-                    onClick={() => handleAddTag()}
-                    className="ml-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400"
-                  >
-                    <Plus size={14} />
-                  </button>
-                </div>
+                    className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                />
+                <Button type="button" variant="secondary" onClick={() => handleAddTag()} disabled={!tagInput.trim()} size="sm">
+                    <Plus size={18} />
+                </Button>
             </div>
-            
-            {/* Quick Add Existing Tags */}
+            {/* Quick Add Tags */}
             {quickAddTags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-slate-50 dark:border-slate-800/50">
-                    {quickAddTags.slice(0, 10).map(tag => (
-                        <button
-                            key={tag}
-                            type="button"
-                            onClick={() => handleAddTag(tag)}
-                            className="text-[10px] px-2 py-0.5 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-400 border border-slate-100 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                        >
-                            #{tag}
-                        </button>
+                <div className="flex flex-wrap gap-1 mt-2">
+                    {quickAddTags.slice(0, 8).map(tag => (
+                        <Tag key={tag} label={tag} onClick={() => handleAddTag(tag)} />
                     ))}
                 </div>
             )}
-            </div>
+          </div>
         </div>
-        
-        {/* Add New Entry Section */}
-        <div className="mt-8">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center">
-               {t.addEntryLabel}
-            </h3>
-            
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm">
-              <textarea
-                  ref={entryInputRef}
-                  value={newContent}
-                  onChange={e => setNewContent(e.target.value)}
-                  placeholder={t.notesPlaceholder}
-                  className="w-full h-32 bg-transparent border-none px-4 py-3 focus:ring-0 outline-none resize-none leading-relaxed text-sm placeholder:text-slate-300"
-              />
-              
-              <div className="bg-slate-50 dark:bg-slate-900/50 px-3 py-2 border-t border-slate-100 dark:border-slate-700 flex flex-col gap-2">
-                 {/* Images Preview Row */}
-                 {newImages.length > 0 && (
-                    <div className="flex gap-1 mb-1">
-                      {newImages.map((img, idx) => (
-                          <div key={idx} className="relative group w-10 h-10 rounded overflow-hidden border border-slate-200 dark:border-slate-600">
-                          <img src={img} alt="thumb" className="w-full h-full object-cover" />
-                          <button 
-                              onClick={() => removeImage(idx)}
-                              className="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                              <X size={12} />
-                          </button>
-                          </div>
-                      ))}
-                    </div>
-                 )}
 
-                 {/* Controls Row */}
-                 <div className="flex justify-between items-center">
-                    <div className="flex gap-2">
-                        <button 
-                            onClick={() => fileInputRef.current?.click()}
-                            className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-1 flex items-center gap-1 text-xs"
-                            title={t.addImage}
-                            >
-                            <ImageIcon size={18} />
-                        </button>
+        {/* New Entry Section */}
+        <div className="space-y-3">
+             <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <Plus size={16} className="text-indigo-500"/> {t.addEntryLabel}
+                </h3>
+             </div>
+             
+             <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 transition-all">
+                <textarea
+                    ref={entryInputRef}
+                    value={newContent}
+                    onChange={(e) => setNewContent(e.target.value)}
+                    placeholder={t.notesPlaceholder}
+                    className="w-full p-4 bg-transparent border-none focus:ring-0 resize-none min-h-[120px] text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400"
+                />
+                
+                {/* Image Previews */}
+                {newImages.length > 0 && (
+                    <div className="px-4 pb-2 flex gap-2 overflow-x-auto no-scrollbar">
+                        {newImages.map((img, idx) => (
+                            <div key={idx} className="relative group shrink-0">
+                                <img src={img} alt="Preview" className="h-16 w-16 object-cover rounded-lg border border-slate-200 dark:border-slate-700" />
+                                <button 
+                                    onClick={() => removeImage(idx)}
+                                    className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 shadow-md hover:bg-red-600 transition-colors"
+                                >
+                                    <X size={12} />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                <div className="bg-slate-50 dark:bg-slate-800/50 px-3 py-2 flex justify-between items-center border-t border-slate-100 dark:border-slate-700">
+                    <div>
                         <input 
                             type="file" 
-                            ref={fileInputRef} 
                             accept="image/*" 
+                            multiple
                             className="hidden" 
-                            onChange={handleImageUpload} 
+                            ref={fileInputRef}
+                            onChange={handleImageUpload}
                         />
+                        <button 
+                            onClick={() => fileInputRef.current?.click()}
+                            className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors flex items-center gap-2 text-xs font-medium"
+                        >
+                            <ImageIcon size={18} />
+                            {newImages.length === 0 && t.addImage}
+                        </button>
                     </div>
-                    
-                    <button
-                        onClick={handleAddEntry}
+                    <Button 
+                        size="sm" 
+                        onClick={handleAddEntry} 
                         disabled={!newContent.trim() && newImages.length === 0}
-                        className="px-3 py-1 bg-indigo-600 text-white text-xs font-bold rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                         {t.confirmAddNote}
-                    </button>
-                 </div>
-              </div>
-            </div>
+                    </Button>
+                </div>
+             </div>
         </div>
 
-        {/* History Timeline */}
+        {/* Timeline */}
         {entries.length > 0 && (
-            <div className="mt-6">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">{t.historyLabel}</h3>
-                <div className="space-y-4">
+            <div className="space-y-4 pt-2">
+                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                    <Clock size={14} /> {t.historyLabel}
+                </h3>
+                
+                <div className="relative border-l-2 border-slate-200 dark:border-slate-700 ml-3 space-y-6 pb-2">
                     {entries.map((entry) => (
-                        <div key={entry.id} className="group relative">
-                            {/* Connector Line */}
-                            <div className="absolute top-4 left-[9px] bottom-[-20px] w-px bg-slate-200 dark:bg-slate-800 last:hidden"></div>
+                        <div key={entry.id} className="relative pl-6 group">
+                            <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-50 dark:bg-slate-900 border-2 border-indigo-400 dark:border-indigo-600 z-10 group-hover:scale-110 transition-transform"></div>
                             
-                            <div className="flex gap-4">
-                                <div className="mt-1.5 w-5 h-5 rounded-full border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center justify-center shrink-0 z-10">
-                                   <div className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600"></div>
+                            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700/50 shadow-sm hover:shadow-md transition-shadow relative">
+                                <div className="flex justify-between items-start mb-2">
+                                    <span className="text-xs text-slate-400 font-medium font-mono">
+                                        {formatDate(entry.createdAt, locale)}
+                                    </span>
+                                    <button 
+                                        onClick={() => setEntryToDelete(entry.id)}
+                                        className="text-slate-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
                                 </div>
-                                
-                                <div className="flex-1 pb-2">
-                                    <div className="flex justify-between items-start mb-1">
-                                        <div className="text-[10px] font-bold text-slate-400">
-                                            {formatDate(entry.createdAt, locale)}
-                                        </div>
-                                        <button onClick={() => setEntryToDelete(entry.id)} className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1">
-                                            <Trash2 size={12} />
-                                        </button>
-                                    </div>
-                                    <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
-                                        {entry.content}
-                                    </div>
-                                    {entry.images && entry.images.length > 0 && (
-                                        <div className="flex gap-2 mt-2 overflow-x-auto">
-                                            {entry.images.map((img, i) => (
-                                                <img key={i} src={img} className="h-16 w-auto rounded border border-slate-200 dark:border-slate-700" alt="attachment" />
-                                            ))}
-                                        </div>
-                                    )}
+                                <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                                    {entry.content}
                                 </div>
+                                {entry.images && entry.images.length > 0 && (
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                        {entry.images.map((img, i) => (
+                                            <div 
+                                                key={i} 
+                                                className="relative h-20 w-20 cursor-zoom-in rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 hover:ring-2 ring-indigo-500/50 transition-all"
+                                                onClick={() => setZoomedImage(img)}
+                                            >
+                                                <img 
+                                                    src={img} 
+                                                    alt="Attachment" 
+                                                    className="w-full h-full object-cover" 
+                                                    loading="lazy"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))}
                 </div>
             </div>
         )}
-
-        <div className="h-10" /> 
-        
-        <ConfirmDialog 
-          isOpen={!!entryToDelete}
-          title={t.delete}
-          message={t.confirmDeleteEntry}
-          confirmLabel={t.delete}
-          cancelLabel={t.cancel}
-          onConfirm={handleDeleteEntryConfirm}
-          onCancel={() => setEntryToDelete(null)}
-          isDestructive={true}
-        />
       </div>
+
+      {/* Delete Confirmation */}
+      <ConfirmDialog 
+        isOpen={!!entryToDelete}
+        title={t.delete}
+        message={t.confirmDeleteEntry}
+        confirmLabel={t.delete}
+        cancelLabel={t.cancel}
+        onConfirm={handleDeleteEntryConfirm}
+        onCancel={() => setEntryToDelete(null)}
+        isDestructive
+      />
+      
+      {/* Unsaved Changes Dialog */}
+      <ConfirmDialog 
+        isOpen={showDiscardConfirm}
+        title={t.discardTitle}
+        message={t.discardMessage}
+        confirmLabel={t.saveAndExit}
+        cancelLabel={t.discardAndExit}
+        onConfirm={handleSave}
+        onCancel={onCancel}
+        onClose={() => setShowDiscardConfirm(false)}
+      />
+
+      {/* Validation Alert (Empty Title) */}
+      <ConfirmDialog
+        isOpen={showValidationAlert}
+        title={t.alertTitle}
+        message={t.titleRequired}
+        confirmLabel={t.ok}
+        onConfirm={() => setShowValidationAlert(false)}
+        onCancel={() => setShowValidationAlert(false)}
+      />
+
+      <ImageModal 
+        isOpen={!!zoomedImage}
+        imageUrl={zoomedImage}
+        onClose={() => setZoomedImage(null)}
+      />
     </div>
   );
 };
